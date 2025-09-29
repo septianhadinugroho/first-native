@@ -1,98 +1,84 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { supabase } from '@/lib/supabase';
+import * as api from '@/services/api'; // Menggunakan lapisan API
+import { Note } from '@/types';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Link, router, useFocusEffect } from 'expo-router';
+import { styled } from "nativewind/dist/pre-v4/styled";
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, FlatList, Text, TouchableOpacity, View } from 'react-native';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+const StyledView = styled(View);
+const StyledText = styled(Text);
+const StyledTouchableOpacity = styled(TouchableOpacity);
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [loading, setLoading] = useState(true);
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  // useFocusEffect akan menjalankan fetchNotes setiap kali layar ini menjadi fokus
+  useFocusEffect(
+    useCallback(() => {
+      const fetchNotes = async () => {
+        try {
+          setLoading(true);
+          const data = await api.getNotes(); // Memanggil dari service
+          setNotes(data);
+        } catch (error) {
+          console.error("Error fetching notes:", error);
+          // Di sini kamu bisa menambahkan notifikasi error ke pengguna
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchNotes();
+    }, [])
+  );
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.replace('/login');
+  };
+
+  if (loading) {
+    return (
+      <StyledView className="flex-1 justify-center items-center bg-background dark:bg-dark-background">
+        <ActivityIndicator size="large" color="#3b82f6" />
+      </StyledView>
+    );
+  }
+
+  return (
+    <StyledView className="flex-1 bg-background dark:bg-dark-background p-5 pt-16">
+      <View className="flex-row justify-between items-center mb-4">
+        <StyledText className="text-3xl font-poppins-bold text-primary dark:text-dark-primary">
+          My Notes
+        </StyledText>
+        <TouchableOpacity onPress={handleLogout}>
+          <MaterialCommunityIcons name="logout" size={24} color="#ef4444" />
+        </TouchableOpacity>
+      </View>
+      <FlatList
+        data={notes}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <Link href={{ pathname: "/note/[id]", params: { id: item.id } }} asChild>
+            <StyledTouchableOpacity className="bg-white dark:bg-slate-800 p-4 rounded-lg mb-3 shadow-md">
+              <StyledText className="text-lg font-poppins-bold text-text dark:text-dark-text">{item.title}</StyledText>
+              <StyledText className="font-poppins text-slate-500 dark:text-slate-400 mt-1" numberOfLines={2}>{item.content}</StyledText>
+            </StyledTouchableOpacity>
+          </Link>
+        )}
+        ListEmptyComponent={() => (
+          <StyledView className="mt-20 items-center">
+            <StyledText className="font-poppins text-slate-500 dark:text-slate-400">Belum ada catatan. Ayo buat satu!</StyledText>
+          </StyledView>
+        )}
+      />
+      <Link href="/note/create" asChild>
+        <StyledTouchableOpacity className="absolute bottom-10 right-5 bg-accent dark:bg-dark-accent w-16 h-16 rounded-full justify-center items-center shadow-lg">
+          <MaterialCommunityIcons name="plus" size={32} color="white" />
+        </StyledTouchableOpacity>
+      </Link>
+    </StyledView>
   );
 }
-
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});
